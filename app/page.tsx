@@ -69,7 +69,7 @@ export default function Dashboard() {
         .from('captures')
         .select('*')
         .eq('archived', false)
-        .in('statut', ['en_cours', 'todo'])
+        .in('statut', ['en_cours', 'non_debutee'])
         .order('priorite', { ascending: false })
         .limit(5);
       
