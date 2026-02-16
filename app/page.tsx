@@ -275,7 +275,7 @@ export default function Dashboard() {
               {taches.length} tâches
             </div>
             <div className="text-sm opacity-90">
-              {taches.filter(t => t.priorite === 'haute').length} urgentes
+              {taches.filter(t => t.priorite === 'Urgent').length} urgentes
             </div>
           </div>
 
@@ -345,9 +345,10 @@ export default function Dashboard() {
                 {taches.slice(0, 5).map(t => (
                   <div key={t.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg">
                     <div className={`w-2 h-2 rounded-full ${
-                      t.priorite === 'haute' ? 'bg-red-500' : 
-                      t.priorite === 'moyenne' ? 'bg-orange-500' : 
-                      'bg-blue-500'
+                      t.priorite === 'Urgent' ? 'bg-red-500' : 
+                      t.priorite === 'À Planifier' ? 'bg-yellow-500' : 
+                      t.priorite === 'À Valider' ? 'bg-blue-500' : 
+                      'bg-gray-400'
                     }`} />
                     <div className="flex-1">
                       <div className="text-sm font-medium text-slate-900">{t.name}</div>
