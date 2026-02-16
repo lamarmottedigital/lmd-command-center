@@ -4,78 +4,85 @@ import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import '../../globals.css';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-export default function NewTache() {
+export default function NouvelleTache() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const [name, setName] = useState('');
+  const [entree, setEntree] = useState('');
+  const [notes, setNotes] = useState('');
   const [priorite, setPriorite] = useState('standard');
   const [statut, setStatut] = useState('non_debutee');
-  const [source, setSource] = useState('tache');
   const [deadline, setDeadline] = useState('');
-  const [projectId, setProjectId] = useState('');
-  const [notes, setNotes] = useState('');
+  const [urlDrive, setUrlDrive] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-    setError('');
 
     if (!name.trim()) {
       setError('Le nom de la tâche est obligatoire');
-      setSaving(false);
       return;
     }
 
+    setSaving(true);
+    setError('');
+
     try {
-      const tacheData: any = {
+      const insertData: any = {
         name: name.trim(),
+        entree: entree.trim() || null,
+        notes: notes.trim() || null,
         priorite,
         statut,
-        source,
+        url_drive: urlDrive.trim() || null,
         archived: false
       };
 
-      if (deadline) tacheData.deadline = deadline;
-      if (projectId) tacheData.project_id = projectId;
-      if (notes.trim()) tacheData.notes = notes.trim();
+      if (deadline) insertData.deadline = deadline;
 
-      const { error: insertError } = await supabase
-        .from('captures')
-        .insert([tacheData]);
+      const { data, error: insertError } = await supabase
+        .from('taches')
+        .insert(insertData)
+        .select()
+        .single();
 
       if (insertError) throw insertError;
 
-      router.push('/');
+      router.push(`/taches/${data.id}`);
     } catch (err: any) {
-      setError(err.message || 'Erreur lors de la création');
+      setError(err.message || 'Erreur de création');
       setSaving(false);
     }
   };
 
   return (
     <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         
+        {/* Header */}
         <div className="mb-8">
-          <Link href="/" className="text-blue-200 hover:text-white text-sm mb-2 inline-block">
-            ← Retour au dashboard
+          <Link href="/taches" className="text-blue-200 hover:text-white text-sm mb-2 inline-block">
+            ← Retour aux tâches
           </Link>
           <h1 className="text-3xl md:text-4xl font-bold text-white">
-            📋 Nouvelle tâche
+            ➕ Nouvelle tâche
           </h1>
         </div>
 
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6">
+            ❌ {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
           
-          {/* Nom */}
           <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Nom de la tâche *
@@ -84,13 +91,25 @@ export default function NewTache() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Appeler Jean Dupont"
+              placeholder="Ex: Finaliser le projet LMD"
               className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               required
             />
           </div>
 
-          {/* Priorité & Statut */}
+          <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Description / Détails
+            </label>
+            <textarea
+              value={entree}
+              onChange={(e) => setEntree(e.target.value)}
+              rows={4}
+              placeholder="Détails de la tâche..."
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
           <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -122,36 +141,46 @@ export default function NewTache() {
                 <option value="terminee">✅ Terminée</option>
               </select>
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Deadline
+              </label>
+              <input
+                type="date"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
 
-          {/* Deadline */}
           <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Deadline (optionnel)
-            </label>
-            <input
-              type="date"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Notes */}
-          <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Notes (optionnel)
+              Notes supplémentaires
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Détails supplémentaires..."
-              rows={4}
+              rows={3}
+              placeholder="Notes additionnelles..."
               className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          {/* Boutons */}
+          <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Lien Google Drive
+            </label>
+            <input
+              type="url"
+              value={urlDrive}
+              onChange={(e) => setUrlDrive(e.target.value)}
+              placeholder="https://drive.google.com/..."
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
           <div className="flex gap-4">
             <button
               type="submit"
@@ -160,20 +189,14 @@ export default function NewTache() {
             >
               {saving ? 'Création...' : '✅ Créer la tâche'}
             </button>
-            
             <Link
-              href="/"
+              href="/taches"
               className="px-6 py-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg transition-colors text-center"
             >
               Annuler
             </Link>
           </div>
 
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
-              ❌ {error}
-            </div>
-          )}
         </form>
 
       </div>
