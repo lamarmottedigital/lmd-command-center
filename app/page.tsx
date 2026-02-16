@@ -12,7 +12,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [tresorerie, setTresorerie] = useState<any>(null);
-  const [taches, setTaches] = useState<any[]>([]);
+  const [tachesEnCours, setTachesEnCours] = useState<any[]>([]);
+  const [tachesUrgentes, setTachesUrgentes] = useState<any[]>([]);
+  const [notes, setNotes] = useState<any[]>([]);
+  const [decisions, setDecisions] = useState<any[]>([]);
   const [rdvs, setRdvs] = useState<any[]>([]);
   const [prospects, setProspects] = useState<any[]>([]);
   const [journalOS, setJournalOS] = useState<any>(null);
@@ -27,7 +30,10 @@ export default function Dashboard() {
     setLoading(true);
     await Promise.all([
       loadTresorerie(),
-      loadTaches(),
+      loadTachesEnCours(),
+      loadTachesUrgentes(),
+      loadNotes(),
+      loadDecisions(),
       loadRDVs(),
       loadProspects(),
       loadJournalOS(),
@@ -63,20 +69,74 @@ export default function Dashboard() {
     }
   };
 
-  const loadTaches = async () => {
+  const loadTachesEnCours = async () => {
     try {
       const { data, error } = await supabase
-        .from('captures')
+        .from('taches')
         .select('*')
         .eq('archived', false)
-        .in('statut', ['en_cours', 'non_debutee'])
-        .order('priorite', { ascending: false })
+        .eq('statut', 'en_cours')
+        .order('created_at', { ascending: false })
         .limit(5);
       
       if (error) throw error;
-      setTaches(data || []);
+      setTachesEnCours(data || []);
     } catch (error) {
-      console.error('Erreur tâches:', error);
+      console.error('Erreur tâches en cours:', error);
+    }
+  };
+
+  const loadTachesUrgentes = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const in3days = new Date(Date.now() + 3*24*60*60*1000).toISOString().split('T')[0];
+      
+      const { data, error } = await supabase
+        .from('taches')
+        .select('*')
+        .eq('archived', false)
+        .neq('statut', 'terminee')
+        .or(`priorite.eq.urgent,and(deadline.gte.${today},deadline.lte.${in3days})`)
+        .order('deadline', { ascending: true, nullsFirst: false })
+        .limit(5);
+      
+      if (error) throw error;
+      setTachesUrgentes(data || []);
+    } catch (error) {
+      console.error('Erreur tâches urgentes:', error);
+    }
+  };
+
+  const loadNotes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('archived', false)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      if (error) throw error;
+      setNotes(data || []);
+    } catch (error) {
+      console.error('Erreur notes:', error);
+    }
+  };
+
+  const loadDecisions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('decisions')
+        .select('*')
+        .eq('archived', false)
+        .in('statut', ['active', 'implementee'])
+        .order('decision_date', { ascending: false })
+        .limit(5);
+      
+      if (error) throw error;
+      setDecisions(data || []);
+    } catch (error) {
+      console.error('Erreur décisions:', error);
     }
   };
 
@@ -140,7 +200,6 @@ export default function Dashboard() {
     try {
       const dateKey = new Date().toISOString().split('T')[0];
       
-      // Vérifier si on a déjà chargé pour aujourd'hui (sauf si forceNew)
       if (!forceNew) {
         const stored = localStorage.getItem('punchline_date');
         if (stored === dateKey) {
@@ -152,7 +211,6 @@ export default function Dashboard() {
         }
       }
       
-      // Récupérer toutes les affirmations
       const { data, error } = await supabase
         .from('affirmations')
         .select('citation')
@@ -161,11 +219,9 @@ export default function Dashboard() {
       if (error) throw error;
       
       if (data && data.length > 0) {
-        // Calculer l'index basé sur la date
         const date = new Date();
         const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
         
-        // Si forceNew, on prend la suivante
         let index = dayOfYear % data.length;
         if (forceNew) {
           const currentIndex = parseInt(localStorage.getItem('punchline_index') || '0');
@@ -176,7 +232,6 @@ export default function Dashboard() {
         const text = affirmation.citation;
         setPunchline(text);
         
-        // Sauvegarder
         localStorage.setItem('punchline_date', dateKey);
         localStorage.setItem('punchline_text', text);
         localStorage.setItem('punchline_index', index.toString());
@@ -209,6 +264,21 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Erreur graphique:', error);
     }
+  };
+
+  const getPrioriteColor = (priorite: string) => {
+    switch (priorite) {
+      case 'urgent': return 'bg-red-500';
+      case 'a_planifier': return 'bg-yellow-500';
+      case 'a_valider': return 'bg-blue-500';
+      default: return 'bg-gray-400';
+    }
+  };
+
+  const getTypeConcilBadge = (type: string) => {
+    return type === 'petit_concil' 
+      ? 'bg-yellow-100 text-yellow-800' 
+      : 'bg-purple-100 text-purple-800';
   };
 
   if (loading) {
@@ -266,18 +336,20 @@ export default function Dashboard() {
           </Link>
 
           {/* Tâches */}
-          <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-6 text-white shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-2xl">📋</span>
-              <span className="text-sm opacity-80">En cours</span>
+          <Link href="/taches" className="block">
+            <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-6 text-white shadow-xl hover:shadow-2xl transition-shadow cursor-pointer">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-2xl">📋</span>
+                <span className="text-sm opacity-80">Actives</span>
+              </div>
+              <div className="text-3xl font-bold mb-1">
+                {tachesEnCours.length} en cours
+              </div>
+              <div className="text-sm opacity-90">
+                {tachesUrgentes.length} urgentes
+              </div>
             </div>
-            <div className="text-3xl font-bold mb-1">
-              {taches.length} tâches
-            </div>
-            <div className="text-sm opacity-90">
-              {taches.filter(t => t.priorite === 'urgent').length} urgentes
-            </div>
-          </div>
+          </Link>
 
           {/* RDVs */}
           <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl p-6 text-white shadow-xl">
@@ -329,31 +401,34 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Tâches détaillées */}
+          {/* Tâches en cours */}
           <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-slate-900">📝 Tâches prioritaires</h2>
-              <Link
-                href="/taches/new"
-                className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg transition-colors"
-              >
-                ➕
-              </Link>
+              <h2 className="text-xl font-bold text-slate-900">⏳ Tâches en cours</h2>
+              <div className="flex gap-2">
+                <Link
+                  href="/taches"
+                  className="text-sm bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded-lg transition-colors"
+                >
+                  Voir tout
+                </Link>
+                <Link
+                  href="/taches/new"
+                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg transition-colors"
+                >
+                  ➕
+                </Link>
+              </div>
             </div>
-            {taches.length > 0 ? (
+            {tachesEnCours.length > 0 ? (
               <div className="space-y-2">
-                {taches.slice(0, 5).map(t => (
+                {tachesEnCours.map(t => (
                   <Link 
                     key={t.id} 
                     href={`/taches/${t.id}`}
                     className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
                   >
-                    <div className={`w-2 h-2 rounded-full ${
-                      t.priorite === 'urgent' ? 'bg-red-500' : 
-                      t.priorite === 'a_planifier' ? 'bg-yellow-500' : 
-                      t.priorite === 'a_valider' ? 'bg-blue-500' : 
-                      'bg-gray-400'
-                    }`} />
+                    <div className={`w-2 h-2 rounded-full ${getPrioriteColor(t.priorite)}`} />
                     <div className="flex-1">
                       <div className="text-sm font-medium text-slate-900">{t.name}</div>
                       {t.deadline && (
@@ -371,9 +446,134 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Bottom Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Second Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           
+          {/* Tâches urgentes */}
+          <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-slate-900">🔥 Tâches urgentes</h2>
+              <Link
+                href="/taches?filter=urgent"
+                className="text-sm bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded-lg transition-colors"
+              >
+                Voir tout
+              </Link>
+            </div>
+            {tachesUrgentes.length > 0 ? (
+              <div className="space-y-2">
+                {tachesUrgentes.map(t => (
+                  <Link 
+                    key={t.id} 
+                    href={`/taches/${t.id}`}
+                    className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <div className={`w-2 h-2 rounded-full ${getPrioriteColor(t.priorite)}`} />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-slate-900">{t.name}</div>
+                      {t.deadline && (
+                        <div className="text-xs text-red-600 font-semibold">
+                          ⏰ {new Date(t.deadline).toLocaleDateString('fr-FR')}
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-center py-8">Aucune tâche urgente</p>
+            )}
+          </div>
+
+          {/* Notes récentes */}
+          <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-slate-900">📝 Notes récentes</h2>
+              <div className="flex gap-2">
+                <Link
+                  href="/notes"
+                  className="text-sm bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded-lg transition-colors"
+                >
+                  Voir tout
+                </Link>
+                <Link
+                  href="/notes/new"
+                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg transition-colors"
+                >
+                  ➕
+                </Link>
+              </div>
+            </div>
+            {notes.length > 0 ? (
+              <div className="space-y-2">
+                {notes.map(n => (
+                  <Link 
+                    key={n.id} 
+                    href={`/notes/${n.id}`}
+                    className="block p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <div className="text-sm font-medium text-slate-900">
+                      {n.title || 'Sans titre'}
+                    </div>
+                    <div className="text-xs text-slate-500 line-clamp-1">
+                      {n.content.substring(0, 100)}...
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-center py-8">Aucune note</p>
+            )}
+          </div>
+        </div>
+
+        {/* Third Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          
+          {/* Décisions */}
+          <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-slate-900">🧠 Décisions actives</h2>
+              <div className="flex gap-2">
+                <Link
+                  href="/decisions"
+                  className="text-sm bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded-lg transition-colors"
+                >
+                  Voir tout
+                </Link>
+                <Link
+                  href="/decisions/new"
+                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg transition-colors"
+                >
+                  ➕
+                </Link>
+              </div>
+            </div>
+            {decisions.length > 0 ? (
+              <div className="space-y-2">
+                {decisions.map(d => (
+                  <Link 
+                    key={d.id} 
+                    href={`/decisions/${d.id}`}
+                    className="block p-3 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs px-2 py-1 rounded ${getTypeConcilBadge(d.type_concil)}`}>
+                        {d.type_concil === 'petit_concil' ? '🟡 Petit Concil' : '🔴 Grand Concil'}
+                      </span>
+                    </div>
+                    <div className="text-sm font-medium text-slate-900">{d.title}</div>
+                    <div className="text-xs text-slate-500 line-clamp-1">
+                      {d.decision.substring(0, 80)}...
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-center py-8">Aucune décision active</p>
+            )}
+          </div>
+
           {/* Journal OS */}
           <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
@@ -439,23 +639,23 @@ export default function Dashboard() {
               <p className="text-slate-500 text-center py-8">Aucune entrée aujourd'hui</p>
             )}
           </div>
+        </div>
 
-          {/* Punchline */}
-          <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-6 shadow-xl text-white lg:col-span-2 flex flex-col relative">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">💪 Punchline</h2>
-              <button
-                onClick={() => loadPunchline(true)}
-                className="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-lg transition-colors text-sm"
-              >
-                🔄 Suivante
-              </button>
-            </div>
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-xl md:text-2xl font-medium italic leading-relaxed">
-                  {punchline || 'Chargement...'}
-                </div>
+        {/* Punchline */}
+        <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-6 shadow-xl text-white mb-6 flex flex-col relative">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold">💪 Punchline</h2>
+            <button
+              onClick={() => loadPunchline(true)}
+              className="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-lg transition-colors text-sm"
+            >
+              🔄 Suivante
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-xl md:text-2xl font-medium italic leading-relaxed">
+                {punchline || 'Chargement...'}
               </div>
             </div>
           </div>
@@ -463,7 +663,7 @@ export default function Dashboard() {
 
         {/* Chart */}
         {focusData.length > 0 && (
-          <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl mt-6">
+          <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
             <h2 className="text-xl font-bold text-slate-900 mb-4">📈 Évolution (7 derniers jours)</h2>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={focusData}>
