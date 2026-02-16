@@ -17,8 +17,8 @@ export default function NewTache() {
 
   const [name, setName] = useState('');
   const [priorite, setPriorite] = useState('standard');
-  const [statut, setStatut] = useState('todo');
-  const [source, setSource] = useState('manuel');
+  const [statut, setStatut] = useState('non_debutee');
+  const [source, setSource] = useState('tache');
   const [deadline, setDeadline] = useState('');
   const [projectId, setProjectId] = useState('');
   const [notes, setNotes] = useState('');
@@ -117,9 +117,9 @@ export default function NewTache() {
                 onChange={(e) => setStatut(e.target.value)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <option value="todo">📝 À faire</option>
+                <option value="non_debutee">📝 Non débutée</option>
                 <option value="en_cours">⏳ En cours</option>
-                <option value="done">✅ Terminée</option>
+                <option value="terminee">✅ Terminée</option>
               </select>
             </div>
           </div>
