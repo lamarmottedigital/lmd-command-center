@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import '../../globals.css';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -18,12 +17,13 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Form states
   const [name, setName] = useState('');
-  const [priorite, setPriorite] = useState('');
-  const [statut, setStatut] = useState('');
-  const [deadline, setDeadline] = useState('');
+  const [entree, setEntree] = useState('');
   const [notes, setNotes] = useState('');
+  const [priorite, setPriorite] = useState('standard');
+  const [statut, setStatut] = useState('non_debutee');
+  const [deadline, setDeadline] = useState('');
+  const [urlDrive, setUrlDrive] = useState('');
 
   useEffect(() => {
     loadTache();
@@ -32,7 +32,7 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
   const loadTache = async () => {
     try {
       const { data, error } = await supabase
-        .from('captures')
+        .from('taches')
         .select('*')
         .eq('id', params.id)
         .single();
@@ -41,10 +41,12 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
       
       setTache(data);
       setName(data.name || '');
+      setEntree(data.entree || '');
+      setNotes(data.notes || '');
       setPriorite(data.priorite || 'standard');
       setStatut(data.statut || 'non_debutee');
       setDeadline(data.deadline ? data.deadline.split('T')[0] : '');
-      setNotes(data.notes || '');
+      setUrlDrive(data.url_drive || '');
     } catch (err: any) {
       setError(err.message || 'Erreur de chargement');
     } finally {
@@ -53,21 +55,28 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
   };
 
   const handleUpdate = async () => {
+    if (!name.trim()) {
+      setError('Le nom est obligatoire');
+      return;
+    }
+
     setSaving(true);
     setError('');
 
     try {
       const updates: any = {
-        name,
+        name: name.trim(),
+        entree: entree.trim() || null,
+        notes: notes.trim() || null,
         priorite,
         statut,
-        notes
+        url_drive: urlDrive.trim() || null
       };
 
       if (deadline) updates.deadline = deadline;
 
       const { error: updateError } = await supabase
-        .from('captures')
+        .from('taches')
         .update(updates)
         .eq('id', params.id);
 
@@ -87,24 +96,24 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
 
     try {
       const { error: deleteError } = await supabase
-        .from('captures')
+        .from('taches')
         .delete()
         .eq('id', params.id);
 
       if (deleteError) throw deleteError;
 
-      router.push('/');
+      router.push('/taches');
     } catch (err: any) {
       setError(err.message || 'Erreur de suppression');
     }
   };
 
-  const handleToggleTerminee = async () => {
-    const newStatut = tache.statut === 'terminee' ? 'non_debutee' : 'terminee';
-    
+  const handleToggleStatut = async () => {
     try {
+      const newStatut = tache.statut === 'terminee' ? 'non_debutee' : 'terminee';
+      
       const { error: updateError } = await supabase
-        .from('captures')
+        .from('taches')
         .update({ statut: newStatut })
         .eq('id', params.id);
 
@@ -142,6 +151,15 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
     }
   };
 
+  const getStatutColor = (statut: string) => {
+    switch (statut) {
+      case 'non_debutee': return 'bg-slate-100 text-slate-700';
+      case 'en_cours': return 'bg-orange-100 text-orange-700';
+      case 'terminee': return 'bg-green-100 text-green-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -156,8 +174,8 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
         <div className="text-white text-center">
           <div className="text-6xl mb-4">❌</div>
           <h1 className="text-2xl font-bold mb-4">Tâche introuvable</h1>
-          <Link href="/" className="text-blue-300 hover:text-blue-200">
-            ← Retour au dashboard
+          <Link href="/taches" className="text-blue-300 hover:text-blue-200">
+            ← Retour aux tâches
           </Link>
         </div>
       </div>
@@ -170,16 +188,19 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
         
         {/* Header */}
         <div className="mb-8">
-          <Link href="/" className="text-blue-200 hover:text-white text-sm mb-2 inline-block">
-            ← Retour au dashboard
+          <Link href="/taches" className="text-blue-200 hover:text-white text-sm mb-2 inline-block">
+            ← Retour aux tâches
           </Link>
           <div className="flex items-start justify-between">
             <h1 className="text-3xl md:text-4xl font-bold text-white">
               {editing ? '✏️ Modifier la tâche' : '📋 Détail de la tâche'}
             </h1>
             {!editing && (
-              <div className={`px-4 py-2 rounded-lg ${getPrioriteColor(tache.priorite)}`}>
-                <span className="text-white font-semibold">
+              <div className="flex gap-2">
+                <span className={`text-xs px-3 py-1 rounded-full ${getStatutColor(tache.statut)}`}>
+                  {getStatutLabel(tache.statut)}
+                </span>
+                <span className={`text-xs px-3 py-1 rounded-full text-white ${getPrioriteColor(tache.priorite)}`}>
                   {getPrioriteLabel(tache.priorite)}
                 </span>
               </div>
@@ -199,12 +220,25 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
           <div className="space-y-6">
             <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Nom de la tâche
+                Nom de la tâche *
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+
+            <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Description / Détails
+              </label>
+              <textarea
+                value={entree}
+                onChange={(e) => setEntree(e.target.value)}
+                rows={4}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -256,12 +290,25 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
 
             <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Notes
+                Notes supplémentaires
               </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                rows={6}
+                rows={3}
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Lien Google Drive
+              </label>
+              <input
+                type="url"
+                value={urlDrive}
+                onChange={(e) => setUrlDrive(e.target.value)}
+                placeholder="https://drive.google.com/..."
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -285,22 +332,16 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
         ) : (
           // MODE VISUALISATION
           <div className="space-y-6">
-            {/* Infos principales */}
+            {/* Titre */}
             <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
               <h2 className="text-2xl font-bold text-slate-900 mb-4">
                 {tache.name}
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm text-slate-600 mb-1">Statut</div>
+                  <div className="text-sm text-slate-600 mb-1">Créée le</div>
                   <div className="text-lg font-semibold text-slate-900">
-                    {getStatutLabel(tache.statut)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-slate-600 mb-1">Source</div>
-                  <div className="text-lg font-semibold text-slate-900">
-                    {tache.source || 'N/A'}
+                    {new Date(tache.created_at).toLocaleDateString('fr-FR')}
                   </div>
                 </div>
                 {tache.deadline && (
@@ -311,20 +352,37 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
                     </div>
                   </div>
                 )}
-                <div>
-                  <div className="text-sm text-slate-600 mb-1">Créée le</div>
-                  <div className="text-lg font-semibold text-slate-900">
-                    {new Date(tache.created_at).toLocaleDateString('fr-FR')}
-                  </div>
-                </div>
               </div>
             </div>
+
+            {/* Description */}
+            {tache.entree && (
+              <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
+                <h3 className="text-lg font-bold text-slate-900 mb-3">📄 Description</h3>
+                <p className="text-slate-700 whitespace-pre-wrap">{tache.entree}</p>
+              </div>
+            )}
 
             {/* Notes */}
             {tache.notes && (
               <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
-                <h3 className="text-xl font-bold text-slate-900 mb-3">📝 Notes</h3>
+                <h3 className="text-lg font-bold text-slate-900 mb-3">📝 Notes</h3>
                 <p className="text-slate-700 whitespace-pre-wrap">{tache.notes}</p>
+              </div>
+            )}
+
+            {/* Drive */}
+            {tache.url_drive && (
+              <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl">
+                <h3 className="text-lg font-bold text-slate-900 mb-3">📁 Google Drive</h3>
+                <a
+                  href={tache.url_drive}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-700 underline"
+                >
+                  Ouvrir dans Drive →
+                </a>
               </div>
             )}
 
@@ -338,16 +396,16 @@ export default function TacheDetail({ params }: { params: { id: string } }) {
               </button>
               
               <button
-                onClick={handleToggleTerminee}
-                className={`font-semibold py-4 rounded-lg transition-colors ${
-                  tache.statut === 'terminee'
-                    ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                    : 'bg-green-600 hover:bg-green-700 text-white'
-                }`}
+                onClick={handleToggleStatut}
+                className={`${
+                  tache.statut === 'terminee' 
+                    ? 'bg-orange-600 hover:bg-orange-700' 
+                    : 'bg-green-600 hover:bg-green-700'
+                } text-white font-semibold py-4 rounded-lg transition-colors`}
               >
                 {tache.statut === 'terminee' ? '↩️ Réouvrir' : '✅ Marquer terminée'}
               </button>
-              
+
               <button
                 onClick={handleDelete}
                 className="bg-red-600 hover:bg-red-700 text-white font-semibold py-4 rounded-lg transition-colors"
