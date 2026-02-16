@@ -16,7 +16,7 @@ export default function NewTache() {
   const [error, setError] = useState('');
 
   const [name, setName] = useState('');
-  const [priorite, setPriorite] = useState('Standard');
+  const [priorite, setPriorite] = useState('standard');
   const [statut, setStatut] = useState('todo');
   const [source, setSource] = useState('manuel');
   const [deadline, setDeadline] = useState('');
@@ -101,10 +101,10 @@ export default function NewTache() {
                 onChange={(e) => setPriorite(e.target.value)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <option value="Urgent">🔴 Urgent</option>
-                <option value="À Planifier">🟡 À Planifier</option>
-                <option value="À Valider">🔵 À Valider</option>
-                <option value="Standard">⚪ Standard</option>
+                <option value="urgent">🔴 Urgent</option>
+                <option value="a_planifier">🟡 À Planifier</option>
+                <option value="a_valider">🔵 À Valider</option>
+                <option value="standard">⚪ Standard</option>
               </select>
             </div>
 
